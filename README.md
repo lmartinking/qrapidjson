@@ -21,6 +21,29 @@ Behavior is similar to the builtin `.j.j`, differing in:
 NOTE: You might need to set `DYLD_LIBRARY_PATH` or `LD_LIBRARY_PATH` environment variables
 (Mac and Linux respectively) to the directory where the `.so` lives before running `q`.
 
+# Performance Benchmark
+
+A completely synthetic example, demonstrating ~48x speed improvement:
+
+```
+q)show t: ([] sym: enlist `Symbol; str: enlist "String"; float: enlist 1.23456789; int: enlist 12345678; date: 2000.01.01; dict: (enlist (`a`b`c!(1 2 3))))
+sym    str      float    int      date       dict
+---------------------------------------------------------
+Symbol "String" 1.234568 12345678 2000.01.01 `a`b`c!1 2 3
+
+q)-1 .j.j t;
+[{"sym":"Symbol","str":"String","float":1.234568,"int":12345678,"date":"2000-01-01","dict":{"a":1,"b":2,"c":3}}]
+
+q)-1 tojson t;
+[{"sym":"Symbol","str":"String","float":1.23456789,"int":12345678,"date":"2000-01-01","dict":{"a":1,"b":2,"c":3}}]
+
+q)\t .j.j 100000#t
+3963
+
+q)\t tojson 100000#t
+81
+```
+
 # Licence
 
 LGPLv3. See `LICENSE` and `COPYING.LESSER`.
