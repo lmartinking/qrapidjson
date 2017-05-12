@@ -10,6 +10,8 @@ Behavior is similar to the builtin `.j.j`, differing in:
 
 # Build
 
+You may need to run `git submodule update --init --recursive` the once to get the `rapidjson` sources.
+
     $ make {m32,m64,l32,l64}
     $ cp qrapidjson_{m32,m64,l32,l64}.so /path/to/q/bin
 
