@@ -28,6 +28,8 @@
 #include "k.h"
 
 using namespace rapidjson;
+using std::isinf;
+using std::isnan;
 
 template<typename Writer> void serialise_atom(Writer& w, K x, int i = -1);
 
