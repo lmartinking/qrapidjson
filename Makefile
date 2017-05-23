@@ -1,8 +1,8 @@
 CC := g++
 
 CFLAGS := -std=c++11 -Irapidjson/include -O3 -DNDEBUG
-CFLAGS_32 := -m32 -DRAPIDJSON_SSE2
-CFLAGS_64 := -m64 -DRAPIDJSON_SEE42
+CFLAGS_32 := -m32 -msse2 -DRAPIDJSON_SSE2
+CFLAGS_64 := -m64 -DRAPIDJSON_SSE42
 
 CFLAGS_M := -bundle -undefined dynamic_lookup
 CFLAGS_L := -shared -fPIC -lstdc++
