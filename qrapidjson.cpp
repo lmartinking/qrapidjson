@@ -36,6 +36,7 @@ template<typename Writer> void serialise_atom(Writer& w, K x, int i = -1);
 template<typename Writer> void serialise_list(Writer& w, K x, bool isvec, int i = -1);
 
 template<typename Writer> void serialise_sym(Writer& w, K x, bool isvec, int i = - 1);
+template<typename Writer> void serialise_enum_sym(Writer& w, K x, bool isvec, int i = - 1);
 template<typename Writer> void serialise_char(Writer& w, K x, bool isvec, int i = -1);
 template<typename Writer> void serialise_bool(Writer& w, K x, bool isvec, int i = -1);
 template<typename Writer> void serialise_byte(Writer& w, K x, bool isvec, int i = -1);
@@ -110,6 +111,48 @@ void serialise_sym(Writer& w, K x, bool isvec, int i)
     else
     {
         w.String(x->s);
+    }
+}
+
+template<typename Writer>
+void emit_enum_sym(Writer& w, K sym, int sym_idx)
+{
+    switch (sym_idx)
+    {
+        case(wi):
+        case(ni):   w.Null(); break;
+        default:    w.String((char*)kS(sym)[sym_idx]);
+    }
+}
+
+template<typename Writer>
+void serialise_enum_sym(Writer& w, K x, bool isvec, int i)
+{
+    K sym = k(0, (S)"sym", (K)0);
+    if (! sym || sym->t != 11) {
+        w.Null();
+        return;
+    }
+
+    if (isvec)
+    {
+        if (i >= 0)
+        {
+            emit_enum_sym(w, sym, kI(x)[i]);
+        }
+        else
+        {
+            w.StartArray();
+            for (int i = 0; i < x->n; i++)
+            {
+                emit_enum_sym(w, sym, kI(x)[i]);
+            }
+            w.EndArray();
+        }
+    }
+    else
+    {
+        emit_enum_sym(w, sym, x->i);
     }
 }
 
@@ -921,6 +964,11 @@ void serialise_atom(Writer& w, const K x, int i)
         case (KV):
         case (-KV):
             serialise_second(w, x, isvec, i); break;
+
+        // MAGIC: Enumerated symbols (eg: splayed tables)
+        case (20):
+        case (-20):
+            serialise_enum_sym(w, x, isvec, i); break;
 
         default:
             #ifndef NDEBUG
