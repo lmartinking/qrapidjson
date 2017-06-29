@@ -60,6 +60,8 @@ template<typename Writer> void serialise_guid(Writer& w, K x, bool isvec, int i 
 template<typename Writer> void serialise_dict(Writer& w, K x, bool isvec, int i = -1);
 template<typename Writer> void serialise_table(Writer& w, K x, bool isvec, int i = -1);
 
+template<typename Writer> void serialise_keyed_table(Writer& w, K keys, K values);
+
 
 template<typename Writer>
 void serialise_list(Writer& w, K x, bool isvec, int i)
@@ -824,21 +826,78 @@ void serialise_guid(Writer& w, K x, bool isvec, int i)
 template<typename Writer>
 void serialise_dict(Writer& w, K x, bool isvec, int i)
 {
-    w.StartObject();
     const K keys = kK(x)[0];
     const K values = kK(x)[1];
 
     #ifndef NDEBUG
-    std::cerr << "Dict. key count: " << keys->n << std::endl;
-    std::cerr << "Dict. value type: " << (int)values->t << std::endl;
+    std::cerr << "Dict. key type:    " << (int)keys->t << std::endl;
+    std::cerr << "Dict. key count:   " << keys->n << std::endl;
+    std::cerr << "Dict. value count: " << values->n << std::endl;
+    std::cerr << "Dict. value type:  " << (int)values->t << std::endl;
     #endif
-    for (int i = 0; i < keys->n; i++)
-    {
-        serialise_atom(w, keys, i);
-        serialise_atom(w, values, i);
-    }
 
-    w.EndObject();
+    if (keys->t == XT && values->t == XT)
+    {
+        serialise_keyed_table(w, keys, values);
+    }
+    else
+    {
+        w.StartObject();
+        for (int i = 0; i < keys->n; i++)
+        {
+            serialise_atom(w, keys, i);
+            serialise_atom(w, values, i);
+        }
+        w.EndObject();
+    }
+}
+
+template<typename Writer>
+void serialise_keyed_table(Writer& w, K keys, K values)
+{
+    const K kdict = keys->k;
+    const K kkeys = kK(kdict)[0];
+    const K kvalues = kK(kdict)[1];
+
+    const K vdict = values->k;
+    const K vkeys = kK(vdict)[0];
+    const K vvalues = kK(vdict)[1];
+
+    const int krows = kK(kvalues)[0]->n;
+    const int vrows = kK(vvalues)[0]->n;
+
+    assert(vrows == krows);
+
+    #ifndef NDEBUG
+    std::cerr << "Keyed Table" << std::endl;
+    std::cerr << "Key count:  " << kkeys->n << std::endl;
+    std::cerr << "Key length: " << kvalues->n << std::endl;
+    std::cerr << "Key rows:   " << krows << std::endl;
+
+    std::cerr << "V column count: " << vkeys->n << std::endl;
+    std::cerr << "V length:       " << vvalues->n << std::endl;
+    std::cerr << "V rows:         " << vrows << std::endl;
+    #endif
+
+    // In kdb+, .j.j will serialise a keyed table as a dictionary of key objects to value objects.
+    // However, this is not valid JSON. Instead, we serialise it as if it was an unkeyed table.
+    w.StartArray();
+    for (int i = 0; i < krows; i++)
+    {
+        w.StartObject();
+        for (int j = 0; j < kkeys->n; j++)
+        {
+            serialise_atom(w, kkeys, j);
+            serialise_atom(w, kK(kvalues)[j], i);
+        }
+        for (int j = 0; j < vkeys->n; j++)
+        {
+            serialise_atom(w, vkeys, j);
+            serialise_atom(w, kK(vvalues)[j], i);
+        }
+        w.EndObject();
+    }
+    w.EndArray();
 }
 
 template<typename Writer>
