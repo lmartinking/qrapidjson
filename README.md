@@ -7,6 +7,7 @@ Behavior is similar to the builtin `.j.j`, differing in:
 
  * The serialisation of infinity (eg: `0w` or `0wj`) will become "Inf" or "-Inf" per relaxed JSON spec
  * The precision of serialisation of doubles and floats is left to RapidJSON (rather than `\P`)
+ * Keyed tables are serialised as correct JSON (as if they were a normal table)
 
 # Build
 
