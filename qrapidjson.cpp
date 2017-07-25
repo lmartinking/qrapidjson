@@ -28,8 +28,7 @@
 #include "k.h"
 
 using namespace rapidjson;
-using std::isinf;
-using std::isnan;
+
 
 template<typename Writer> void serialise_atom(Writer& w, K x, int i = -1);
 
@@ -344,11 +343,11 @@ void serialise_long(Writer& w, K x, bool isvec, int i)
 template<typename Writer>
 inline void emit_double(Writer& w, double n)
 {
-    if (isnan(n))
+    if (std::isnan(n))
     {
         w.Null();
     }
-    else if (isinf(n))
+    else if (std::isinf(n))
     {
         w.String(n == INFINITY ? "Inf" : "-Inf");
     }
@@ -594,7 +593,7 @@ void serialise_timespan(Writer& w, K x, bool isvec, int i)
 template<typename Writer>
 inline void emit_datetime(Writer& w, double n)
 {
-    if (isnan(n))
+    if (std::isnan(n))
     {
         w.Null();
     }
