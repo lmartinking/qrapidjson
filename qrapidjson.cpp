@@ -162,10 +162,15 @@ void serialise_char(Writer& w, K x, bool isvec, int i)
 {
     if (isvec)
     {
-        w.String((char*)&kC(x)[0], x->n);
+	if(i == -1) {
+	    w.String((char*)&kC(x), x->n);
+	} else {
+	    w.String((char*)&kC(x)[i], 1);
+	}
     }
     else
     {
+        // FIXME: Fairly sure we can never get here..
         w.String((char*)&x->g, 1);
     }
 }
