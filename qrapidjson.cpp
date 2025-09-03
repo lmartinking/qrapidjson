@@ -19,6 +19,8 @@
 #include <iostream>
 #include <cmath>
 #include <ctime>
+#include <vector>
+#include <cstring> 
 #include <arpa/inet.h> // for ntohl, etc
 
 #include "rapidjson/stringbuffer.h"
@@ -29,6 +31,27 @@
 
 using namespace rapidjson;
 
+// Days between 1970-01-01 (Unix epoch) and 2000-01-01 (kdb+ epoch).
+// 30*365 + 7 leap days (1972,76,80,84,88,92,96) = 10957.
+constexpr long long DAYS_1970_TO_2000 = 10957;
+
+static inline void ymd_from_days(int64_t z, int& y, unsigned& m, unsigned& d) {
+    // z = days since 1970-01-01
+    z += 719468;                                   // convert to civil-from-epoch base
+    int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+    unsigned doe = (unsigned)(z - era * 146097);   // [0, 146096]
+    unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365; // [0, 399]
+    y = (int)(yoe) + (int)era * 400;
+    unsigned doy = doe - (365*yoe + yoe/4 - yoe/100 + yoe/400);     // [0, 365]
+    unsigned mp  = (5*doy + 2) / 153;                               // [0, 11]
+    d = doy - (153*mp + 2)/5 + 1;                                   // [1, 31]
+    m = mp + (mp < 10 ? 3 : -9);                                    // [1, 12]
+    y += (m <= 2);
+}
+
+static inline void write2digits(char* p, unsigned v) { p[0] = '0' + (v/10)%10; p[1] = '0' + v%10; }
+static inline void write3digits(char* p, unsigned v) { p[0] = '0' + (v/100)%10; p[1] = '0' + (v/10)%10; p[2] = '0' + v%10; }
+static inline void write4digits(char* p, unsigned v) { p[0] = '0' + (v/1000)%10; p[1] = '0' + (v/100)%10; p[2] = '0' + (v/10)%10; p[3] = '0' + v%10; }
 
 template<typename Writer> void serialise_atom(Writer& w, K x, int i = -1);
 
@@ -421,12 +444,14 @@ inline void emit_date(Writer& w, int n)
     }
     else
     {
-        time_t tt = (n + 10957) * 8.64e4; // magic, see: https://github.com/kxcontrib/wiki/blob/master/csv.c
-        struct tm timinfo;
-        gmtime_r(&tt, &timinfo);
-        char buff[10+1];
-        snprintf(buff, sizeof(buff), "%04d-%02d-%02d", timinfo.tm_year+1900, timinfo.tm_mon+1, timinfo.tm_mday);
-        w.String(buff, 10);
+        // n = days since 2000-01-01; convert to days since 1970-01-01
+        int y; unsigned m, d;
+        ymd_from_days((int64_t)n + DAYS_1970_TO_2000, y, m, d);
+        char buf[10];
+        write4digits(buf+0, (unsigned)y);
+        buf[4]='-'; write2digits(buf+5, m);
+        buf[7]='-'; write2digits(buf+8, d);
+        w.String(buf, 10);
     }
 }
 
@@ -507,7 +532,7 @@ inline void emit_timestamp(Writer& w, long long n)
     }
     else
     {
-        time_t tt = n * 1e-9 + 10957 * 8.64e4; // magic, see: https://github.com/kxcontrib/wiki/blob/master/csv.c
+        time_t tt = n * 1e-9 + DAYS_1970_TO_2000 * 8.64e4; // magic, see: https://github.com/kxcontrib/wiki/blob/master/csv.c
         struct tm timinfo;
         gmtime_r(&tt, &timinfo);
         char buff[29+1];
@@ -604,15 +629,33 @@ inline void emit_datetime(Writer& w, double n)
     }
     else
     {
-        time_t tt = (n + 10957) * 8.64e4;
-        struct tm timinfo;
-        gmtime_r(&tt, &timinfo);
-        char buff[23+1];
-        snprintf(buff, sizeof(buff),
-            "%04d-%02d-%02dT%02d:%02d:%02d.%03lld",
-            timinfo.tm_year+1900, timinfo.tm_mon+1, timinfo.tm_mday,
-            timinfo.tm_hour, timinfo.tm_min, timinfo.tm_sec, (long long)(round(n*8.64e7))%1000);
-        w.String(buff, 23);
+        // n = days since 2000-01-01 (fractional)
+        long long total_ms = llround(n * 86400000.0);            // integer ms since 2000-01-01
+        long long total_s  = total_ms / 1000;
+        int ms = (int)((total_ms % 1000 + 1000) % 1000);
+
+        // Split into civil date and seconds-of-day (UTC)
+        long long days_2000 = total_s / 86400;
+        long long sod       = total_s % 86400;                   // can be negative
+        if (sod < 0) { sod += 86400; --days_2000; }
+
+        int y; unsigned m, d;
+        ymd_from_days(days_2000 + DAYS_1970_TO_2000, y, m, d);               // -> UTC Y-M-D
+
+        unsigned hh = (unsigned)(sod / 3600);
+        unsigned mm = (unsigned)((sod / 60) % 60);
+        unsigned ss = (unsigned)(sod % 60);
+
+        // "YYYY-MM-DDTHH:MM:SS.mmm" -> 23 chars
+        char buf[23];
+        write4digits(buf+0, (unsigned)y);
+        buf[4]='-'; write2digits(buf+5, m);
+        buf[7]='-'; write2digits(buf+8, d);
+        buf[10]='T'; write2digits(buf+11, hh);
+        buf[13]=':'; write2digits(buf+14, mm);
+        buf[16]=':'; write2digits(buf+17, ss);
+        buf[19]='.'; write3digits(buf+20, (unsigned)ms);
+        w.String(buf, 23);
     }
 }
 
@@ -736,7 +779,7 @@ inline void emit_second(Writer& w, const int n)
     }
     else
     {
-        time_t tt=n*60;
+        time_t tt=n;
         struct tm timinfo;
         gmtime_r(&tt, &timinfo);
         char buff[8 + 1];
@@ -911,13 +954,25 @@ void serialise_table(Writer& w, K x, bool isvec, int i)
     const K keys = kK(dict)[0];
     const K values = kK(dict)[1];
 
+    // Precompute column metadata
+    const int ncols = keys->n;
+    std::vector<K> cols(ncols);
+    std::vector<const char*> kptr(ncols);
+    std::vector<size_t> klen(ncols);
+    for (int j = 0; j < ncols; ++j) {
+        cols[j] = kK(values)[j];
+        // table column names are symbols
+        const char* s = (char*)kS(keys)[j];
+        kptr[j] = s;
+        klen[j] = strlen(s);
+    }
+
     if (i >= 0)
     {
         w.StartObject();
-        for (int j = 0; j < keys->n; j++)
-        {
-            serialise_atom(w, keys, j);
-            serialise_atom(w, kK(values)[j], i);
+        for (int j = 0; j < ncols; ++j) {
+            w.Key(kptr[j], (rapidjson::SizeType)klen[j], /*copy*/false);
+            serialise_atom(w, cols[j], i);
         }
         w.EndObject();
     }
@@ -929,10 +984,9 @@ void serialise_table(Writer& w, K x, bool isvec, int i)
         for (int i = 0; i < rows; i++)
         {
             w.StartObject();
-            for (int j = 0; j < keys->n; j++)
-            {
-                serialise_atom(w, keys, j);
-                serialise_atom(w, kK(values)[j], i);
+            for (int j = 0; j < ncols; ++j) {
+                w.Key(kptr[j], (rapidjson::SizeType)klen[j], /*copy*/false);
+                serialise_atom(w, cols[j], i);
             }
             w.EndObject();
         }
